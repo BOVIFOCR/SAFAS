@@ -141,7 +141,7 @@ def run_replay(rootpath):
 
         if "/real/" in filepath:
             live_or_spoof = 'live'
-        elif "/attk/" in filepath:
+        elif "/attack/" in filepath:
             live_or_spoof = 'spoof'
         else:
             raise RuntimeError(f"What is wrong? {filepath}")
@@ -238,11 +238,11 @@ def run_oulu(rootpath):
         else:
             live_or_spoof = 'spoof'
 
-        if "/Train_files/" in filepath:
+        if "/train/" in filepath:
             split = 'train'
-        elif "/Test_files/" in filepath:
+        elif "/test/" in filepath:
             split = 'test'
-        elif "/Dev_files/" in filepath:
+        elif "/dev/" in filepath:
             split = 'dev'
         else:
             raise RuntimeError(f"What is wrong? {filepath}")
@@ -406,7 +406,7 @@ def generate_square_crop(rootpath, face_width=400):
 
 
 if __name__ == '__main__':
-    oulu_info = run_oulu(rootpath="datasets/FAS/OULU-NPU/")
-    msu_info = run_msu(rootpath="datasets/FAS/MSU-MFSD/")
-    casia_info = run_casia(rootpath="datasets/FAS/CASIA_faceAntisp/")
+    # oulu_info = run_oulu(rootpath="datasets/FAS/OULU-NPU/")
+    # msu_info = run_msu(rootpath="datasets/FAS/MSU-MFSD/")
+    # casia_info = run_casia(rootpath="datasets/FAS/CASIA_faceAntisp/")
     replay_info = run_replay(rootpath="datasets/FAS/Replay/")
