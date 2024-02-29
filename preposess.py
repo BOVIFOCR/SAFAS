@@ -406,7 +406,7 @@ def generate_square_crop(rootpath, face_width=400):
 
 
 if __name__ == '__main__':
-    # oulu_info = run_oulu(rootpath="datasets/FAS/OULU-NPU/")
-    # msu_info = run_msu(rootpath="datasets/FAS/MSU-MFSD/")
-    # casia_info = run_casia(rootpath="datasets/FAS/CASIA_faceAntisp/")
+    oulu_info = run_oulu(rootpath="datasets/FAS/OULU-NPU/")
+    msu_info = run_msu(rootpath="datasets/FAS/MSU-MFSD/")
+    casia_info = run_casia(rootpath="datasets/FAS/CASIA_faceAntisp/")
     replay_info = run_replay(rootpath="datasets/FAS/Replay/")

@@ -17,9 +17,16 @@ import matplotlib.pyplot as plt
 from ylib.scipy_misc import imread, imsave
 from .meta import DEVICE_INFOS
 
-torch.manual_seed(0)
-torch.cuda.manual_seed(0)
-np.random.seed(0)
+# TODO return seeds to 0
+import time
+# torch.manual_seed(0)
+# torch.cuda.manual_seed(0)
+# np.random.seed(0)
+SEED = int(1000*time.time()) % 998244353
+# SEED = 0
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+np.random.seed(SEED)
 
 
 
@@ -51,7 +58,8 @@ class FaceDataset(Dataset):
     def __init__(self, dataset_name, root_dir, split='train', label=None, transform=None, scale_up=1.1, scale_down=1.0, map_size=32, UUID=-1):
         # self.landmarks_frame = pd.read_csv(info_list, delimiter=",", header=None)
         self.split = split
-        self.video_list = os.listdir(root_dir)# list(filter(lambda x: split in x, os.listdir(root_dir)))
+        # self.video_list = os.listdir(root_dir)# list(filter(lambda x: split in x, os.listdir(root_dir)))
+        self.video_list = list(filter(lambda x: split in x, os.listdir(root_dir)))
         if label is not None and label != 'all':
             self.video_list = list(filter(lambda x: label in x, self.video_list))
         self.dataset_name = dataset_name
@@ -68,6 +76,9 @@ class FaceDataset(Dataset):
         return len(self.video_list)
 
     def get_client_from_video_name(self, video_name):
+        for aug in ["patchexchange", "landmarkexchange"]:
+            if aug in video_name:
+                return 0
         if 'msu' in self.dataset_name.lower() or 'replay' in self.dataset_name.lower():
             match = re.findall('client(\d\d\d)', video_name)
             if len(match) > 0:
@@ -101,7 +112,9 @@ class FaceDataset(Dataset):
         # spoofing_label = self.landmarks_frame.iloc[idx, 0]
         video_name = self.video_list[idx]
         spoofing_label = int('live' in video_name)
-        if self.dataset_name in DEVICE_INFOS:
+        aug_prefixes = ["patchexchange", "landmarkexchange"]
+        no_used_aug = all([aug not in video_name for aug in aug_prefixes])
+        if no_used_aug and self.dataset_name in DEVICE_INFOS:
             if 'live' in video_name:
                 patterns = DEVICE_INFOS[self.dataset_name]['live']
             elif 'spoof' in video_name:
@@ -115,7 +128,7 @@ class FaceDataset(Dataset):
                         raise RuntimeError("Multiple Match")
                     device_tag = pattern
             if device_tag is None:
-                raise RuntimeError("No Match")
+                raise RuntimeError("No Match", self.dataset_name, video_name)
         else:
             device_tag = 'live' if spoofing_label else 'spoof'
 
@@ -145,7 +158,7 @@ class FaceDataset(Dataset):
         return sample
 
     def sample_image(self, image_dir):
-        frames = glob(os.path.join(image_dir, "org_*.jpg"))
+        frames = glob(os.path.join(image_dir, "crop_*.jpg"))
         frames_total = len(frames)
         if frames_total == 0:
             raise RuntimeError(f"{image_dir}")
