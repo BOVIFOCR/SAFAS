@@ -46,7 +46,19 @@ def get_single_dataset(data_dir, FaceDataset, data_name="", train=True, label=No
     # print("Loading {}, number: {}".format(data_name, len(data_set)))
     return data_set
 
+def get_oulu_split(data_dir, train=True, transform=None, debug_subset_size=None, UUID=-1):
+    labels_file_name = ("Train" if train else "Test") + ".txt"
+    data_set = OuluFaceDataset(data_dir, os.path.join(data_dir, "Protocols/Protocol_1/", labels_file_name), train, transform, UUID=UUID)
+    if debug_subset_size is not None:
+        data_set = torch.utils.data.Subset(data_set, range(0, debug_subset_size))
+    return data_set
+
 def get_datasets(data_dir, FaceDataset, train=True, protocol="1", img_size=256, map_size=32, transform=None, debug_subset_size=None):
+
+    if protocol == "O1":
+        oulu = get_oulu_split(data_dir, train, transform, debug_subset_size, UUID)
+        print("Total number:", len(oulu))
+        return oulu
 
     data_name_list_train, data_name_list_test = protocol_decoder(protocol)
 
