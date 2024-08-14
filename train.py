@@ -96,11 +96,21 @@ def main(args):
 
     data_name_list_train, data_name_list_test = protocol_decoder(args.protocol)
 
-    train_set = get_datasets(args.data_dir, FaceDataset, train=True, protocol=args.protocol, img_size=args.img_size, map_size=32, transform=train_transform, debug_subset_size=args.debug_subset_size)
-    train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=4)
+
+    train_set = get_datasets(args.data_dir, FaceDataset, train=True, protocol=args.protocol, img_size=args.img_size, map_size=32, transform=train_transform, debug_subset_size=args.debug_subset_size, exchange_aug=args.exchange_aug)
+    if args.class_balancing:
+        train_sampler = torch.utils.data.WeightedRandomSampler(
+                weights=[.5, .5], num_samples=len(train_set), replacement=True)
+    else:
+        train_sampler = torch.utils.data.RandomSampler(train_set)
+
+    train_loader = DataLoader(train_set, batch_size=args.batch_size, sampler=train_sampler, num_workers=4)
 
     test_set = get_datasets(args.data_dir, FaceDataset, train=False, protocol=args.protocol, img_size=args.img_size, map_size=32, transform=test_transform, debug_subset_size=args.debug_subset_size)
-    test_loader = DataLoader(test_set[data_name_list_test[0]], batch_size=args.batch_size, shuffle=False, num_workers=4)
+    if args.protocol == "O1":
+        test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=4)
+    else:
+        test_loader = DataLoader(test_set[data_name_list_test[0]], batch_size=args.batch_size, shuffle=False, num_workers=4)
 
     live_cls_list = []
     spoof_cls_list = []
@@ -224,26 +234,41 @@ def main(args):
         if epoch % epoch_test == epoch_test-1:
 
             score_path = os.path.join(score_root_path, "epoch_{}".format(epoch+1))
+            csv_path = os.path.join(csv_root_path, "epoch_{}".format(epoch+1))
             check_folder(score_path)
+            check_folder(csv_path)
 
             model.eval()
             with torch.no_grad():
                 start_time = time.time()
                 scores_list = []
+                fnames_list = []
                 for i, sample_batched in enumerate(test_loader):
                     image_x, live_label, UUID = sample_batched["image_x_v1"].cuda(), sample_batched["label"].cuda(), sample_batched["UUID"].cuda()
+                    video_name = sample_batched["video"]
                     _, penul_feat, logit = model(image_x, out_type='all', scale=args.scale)
 
                     for i in range(len(logit)):
                         scores_list.append("{} {}\n".format(logit.squeeze()[i].item(), live_label[i].item()))
+                        fnames_list.append("{}\n".format(video_name[i]))
 
 
             map_score_val_filename = os.path.join(score_path, "{}_score.txt".format(data_name_list_test[0]))
+            csv_val_filename = os.path.join(csv_path, "{}.csv".format(data_name_list_test[0]))
             print("score: write test scores to {}".format(map_score_val_filename))
             with open(map_score_val_filename, 'w') as file:
                 file.writelines(scores_list)
 
-            test_ACC, fpr, FRR, HTER, auc_test, test_err, tpr = performances_val(map_score_val_filename)
+            print("csv: write test filenames to {}".format(csv_val_filename))
+            with open(csv_val_filename, 'w') as file:
+                file.writelines(fnames_list)
+
+            try:
+                test_ACC, fpr, FRR, HTER, auc_test, test_err, tpr = performances_val(map_score_val_filename)
+            except:
+                print("deu ruim")
+                print(map_score_val_filename)
+                exit(1)
             print("## {} score:".format(data_name_list_test[0]))
             print("epoch:{:d}, test:  val_ACC={:.4f}, HTER={:.4f}, AUC={:.4f}, val_err={:.4f}, ACC={:.4f}, TPR={:.4f}".format(
                 epoch + 1, test_ACC, HTER, auc_test, test_err, test_ACC, tpr))
@@ -346,6 +371,10 @@ def parse_args():
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     # debug
     parser.add_argument('--debug_subset_size', type=int, default=None)
+    # exchange
+    parser.add_argument('--exchange_aug', type=str, default=None, choices=['patchexchange', 'landmarkexchange'])
+    # balancing
+    parser.add_argument('--class_balancing', action='store_true', help='do artificial class balancing')
     return parser.parse_args()
 
 

@@ -23,6 +23,8 @@ import time
 # torch.cuda.manual_seed(0)
 # np.random.seed(0)
 SEED = int(1000*time.time()) % 998244353
+ALL_AUG_IS_SPOOF = False
+AUG_RATIO = 1
 # SEED = 0
 torch.manual_seed(SEED)
 torch.cuda.manual_seed(SEED)
@@ -55,13 +57,39 @@ def crop_face_from_scene(image, bbox, scale):
 
 class FaceDataset(Dataset):
     
-    def __init__(self, dataset_name, root_dir, split='train', label=None, transform=None, scale_up=1.1, scale_down=1.0, map_size=32, UUID=-1):
+    def __init__(self, dataset_name, root_dir, split='train', label=None, transform=None, scale_up=1.1, scale_down=1.0, map_size=32, UUID=-1, exchange_aug=None, protocol_name=''):
+        def filter_by_split(split_name, iterable): return filter(lambda x: split in x, iterable)
+        def filter_by_label(label, iterable): return filter(lambda x: label in x, iterable)
+        def has_no_aug(fname): return not ("patchexchange" in fname or "landmarkexchange" in fname)
+        def filter_by_aug(aug_name, iterable): return filter(lambda x: aug_name in x or has_no_aug(x), iterable)
+        def filter_by_protocol(exchange_name, protocol_name, iterable): return filter(lambda x: f'{exchange_name}{protocol_name}' in x or has_no_aug(x), iterable)
         # self.landmarks_frame = pd.read_csv(info_list, delimiter=",", header=None)
         self.split = split
         # self.video_list = os.listdir(root_dir)# list(filter(lambda x: split in x, os.listdir(root_dir)))
-        self.video_list = list(filter(lambda x: split in x, os.listdir(root_dir)))
+        original_videos = os.listdir(root_dir)
+        original_videos = list(filter_by_aug("NOEXCHANGE", original_videos))
+        original_videos = list(filter_by_protocol("NOEXCHANGE", "NOSPECIFICPROTOCOL",
+                                                  original_videos))
+        # self.video_list = filter_by_split(split, self.video_list)
         if label is not None and label != 'all':
-            self.video_list = list(filter(lambda x: label in x, self.video_list))
+            original_videos = list(filter_by_label(label, original_videos))
+        self.video_list = original_videos
+
+        aug_videos = []
+        # augmentation-specific filters
+        if split == 'train' and exchange_aug is not None:
+            aug_videos = os.listdir(root_dir)
+            if protocol_name == 'MI2O':
+                protocol_name = 'MI2C'
+            aug_videos = list(filter_by_aug(exchange_aug, aug_videos))
+            aug_videos = list(filter_by_protocol(exchange_aug, protocol_name, aug_videos))
+
+        aug_videos = np.array(aug_videos)
+        np.random.shuffle(aug_videos)
+        aug_videos = list(aug_videos)
+
+        self.video_list += aug_videos[:int(len(self.video_list)*AUG_RATIO)]
+
         self.dataset_name = dataset_name
         self.root_dir = root_dir
         # self.map_root_dir = root_dir.replace("Train_files", "Depth/Train_files")
@@ -111,9 +139,15 @@ class FaceDataset(Dataset):
         # video_name = str(self.landmarks_frame.iloc[idx, 1])
         # spoofing_label = self.landmarks_frame.iloc[idx, 0]
         video_name = self.video_list[idx]
-        spoofing_label = int('live' in video_name)
+        spoofing_label = 'live' in video_name
+
         aug_prefixes = ["patchexchange", "landmarkexchange"]
         no_used_aug = all([aug not in video_name for aug in aug_prefixes])
+
+        if ALL_AUG_IS_SPOOF:
+            spoofing_label &= no_used_aug
+        spoofing_label = int(spoofing_label)
+
         if no_used_aug and self.dataset_name in DEVICE_INFOS:
             if 'live' in video_name:
                 patterns = DEVICE_INFOS[self.dataset_name]['live']
@@ -151,10 +185,12 @@ class FaceDataset(Dataset):
                   "image_x_v2": np.array(image_x_view2),
                   "label": spoofing_label,
                   "UUID": self.UUID,
-                  'device_tag': device_tag,
                   'video': video_name,
-                  'client_id': client_id,
-                  'points': info['points']}
+                  }
+        additional_sample = {  # additional information that is not used
+                  'device_tag': device_tag,
+                  'client_id': client_id,}
+                  # 'points': info['points']}  # tirei pq tinha um info arquivo vazio
         return sample
 
     def sample_image(self, image_dir):
@@ -179,13 +215,13 @@ class FaceDataset(Dataset):
             image_path = os.path.join(image_dir, image_name)
             info_path = os.path.join(image_dir, info_name)
 
-            if os.path.exists(image_path) and os.path.exists(info_path):
+            if os.path.exists(image_path):  # and os.path.exists(info_path):
                 break
 
-        info = np.load(info_path, allow_pickle=True).item()
+        # info = np.load(info_path, allow_pickle=True).item()
         image = imread(image_path)
 
-        return image, info, image_id * 5
+        return image, None, image_id * 5
 
     def generate_square_images(self, image, info, range_scale=3):
         points = np.array(info['points'])

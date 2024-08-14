@@ -53,6 +53,9 @@ def protocol_decoder(protocol):
     elif protocol == "M_I_to_O":
         data_name_list_train = ["MSU_MFSD", "Replay_attack"]
         data_name_list_test = ["OULU"]
+    elif protocol == "O1":
+        data_name_list_train = ["OULU"]
+        data_name_list_test = ["OULU"]
     return data_name_list_train, data_name_list_test
 
 import torch
