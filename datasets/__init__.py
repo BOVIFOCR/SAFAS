@@ -2,6 +2,9 @@ import os, torch
 from utils import protocol_decoder
 import math
 from .oulu_dataset import OuluFaceDataset
+from .wfas_dataset import WFASFaceDataset
+from .rose_dataset import RoseDataset
+from .siw_dataset import SiWDataset
 
 
 class TwoCropTransform:
@@ -27,6 +30,19 @@ def get_single_dataset(data_dir, FaceDataset, data_name="", train=True, label=No
         elif data_name in ["MSU_MFSD"]:
             data_set = FaceDataset(data_name, os.path.join(data_dir, 'MSU-MFSD/preposess'), split='train', label=label,
                                       transform=transform,  UUID=UUID, exchange_aug=exchange_aug, protocol_name=protocol_name)
+        elif data_name in ["ROSE_Youtu"]:
+            data_set = RoseDataset(
+                    data_name,
+                    "/datasets1/rgpa18/datasets/rose_youtu_processed/",
+                    is_train=True, label=label, transform=transform,
+                    img_size=img_size)
+        elif data_name in ["SiW"]:
+            data_set = SiWDataset(
+                    data_name,
+                    "/datasets1/rgpa18/datasets/siw/",
+                    is_trai=True, label=label, transform=transform,
+                    img_size=img_size)
+
         if debug_subset_size is not None:
             data_set = torch.utils.data.Subset(data_set, range(0, debug_subset_size))
     else:
@@ -42,6 +58,19 @@ def get_single_dataset(data_dir, FaceDataset, data_name="", train=True, label=No
         elif data_name in ["MSU_MFSD"]:
             data_set = FaceDataset(data_name, os.path.join(data_dir, 'MSU-MFSD/preposess'), split='test', label=label,
                                       transform=transform, map_size=map_size, UUID=UUID)
+        elif data_name in ["ROSE_Youtu"]:
+            data_set = RoseDataset(
+                    data_name,
+                    "/datasets1/rgpa18/datasets/rose_youtu_processed/",
+                    is_train=False, label=label, transform=transform,
+                    map_size=map_size, UUID=UUID, img_size=img_size)
+        elif data_name in ["SiW"]:
+            data_set = SiWDataset(
+                    data_name,
+                    "/datasets1/rgpa18/datasets/siw/",
+                    is_train=False, label=label, transform=transform,
+                    map_size=map_size, UUID=UUID, img_size=img_size)
+
         if debug_subset_size is not None:
             data_set = torch.utils.data.Subset(data_set, range(0, debug_subset_size))
     # print("Loading {}, number: {}".format(data_name, len(data_set)))
@@ -54,15 +83,25 @@ def get_oulu_split(data_dir, train=True, transform=None, debug_subset_size=None,
         data_set = torch.utils.data.Subset(data_set, range(0, debug_subset_size))
     return data_set
 
+def get_wfas_test(data_dir, transform=None, debug_subset_size=None, UUID=-1):
+    data_set = WFASFaceDataset("/home/rgpa18/original_datasets/wfas/", transform, UUID=UUID)
+    if debug_subset_size is not None:
+        data_set = torch.utils.data.Subset(data_set, range(0, debug_subset_size))
+    return data_set
+
 def get_protocol_name(protocol):
     return protocol.replace('_', '').replace('to', '2')
 
-def get_datasets(data_dir, FaceDataset, train=True, protocol="1", img_size=256, map_size=32, transform=None, debug_subset_size=None, exchange_aug=None):
+def get_datasets(data_dir, FaceDataset, train=True, protocol="1", img_size=256, map_size=32, transform=None, debug_subset_size=None, exchange_aug=None, test_on_wfas=False):
 
     if protocol == "O1":
         oulu = get_oulu_split(data_dir, train, transform, debug_subset_size, 0)
         print("Total number:", len(oulu))
         return oulu
+    if test_on_wfas:
+        wfas = get_wfas_test(data_dir, transform, debug_subset_size, 0)
+        print("Total number:", len(wfas))
+        return wfas
 
     data_name_list_train, data_name_list_test = protocol_decoder(protocol)
 

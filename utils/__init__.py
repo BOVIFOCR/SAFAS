@@ -32,10 +32,10 @@ def protocol_decoder(protocol):
     if protocol == "O_C_I_to_M":
         data_name_list_train = ["OULU", "CASIA_MFSD", "Replay_attack"]
         data_name_list_test = ["MSU_MFSD"]
-    if protocol == "O_C_to_M":
+    elif protocol == "O_C_to_M":
         data_name_list_train = ["OULU", "CASIA_MFSD"]
         data_name_list_test = ["MSU_MFSD"]
-    if protocol == "O_to_O":
+    elif protocol == "O_to_O":
         data_name_list_train = ["OULU"]
         data_name_list_test = ["OULU"]
     elif protocol == "O_M_I_to_C":
@@ -56,6 +56,30 @@ def protocol_decoder(protocol):
     elif protocol == "O1":
         data_name_list_train = ["OULU"]
         data_name_list_test = ["OULU"]
+    elif protocol == "O_C_I_to_ROSE":
+        data_name_list_train = ["OULU", "CASIA_MFSD", "Replay_attack"]
+        data_name_list_test = ["ROSE_Youtu"]
+    elif protocol == "O_M_I_to_ROSE":
+        data_name_list_train = ["OULU", "MSU_MFSD", "Replay_attack"]
+        data_name_list_test = ["ROSE_Youtu"]
+    elif protocol == "O_C_M_to_ROSE":
+        data_name_list_train = ["OULU", "CASIA_MFSD", "MSU_MFSD"]
+        data_name_list_test = ["ROSE_Youtu"]
+    elif protocol == "I_C_M_to_ROSE":
+        data_name_list_train = ["MSU_MFSD", "CASIA_MFSD", "Replay_attack"]
+        data_name_list_test = ["ROSE_Youtu"]
+    elif protocol == "O_C_I_to_SiW":
+        data_name_list_train = ["OULU", "CASIA_MFSD", "Replay_attack"]
+        data_name_list_test = ["SiW"]
+    elif protocol == "O_M_I_to_SiW":
+        data_name_list_train = ["OULU", "MSU_MFSD", "Replay_attack"]
+        data_name_list_test = ["SiW"]
+    elif protocol == "O_C_M_to_SiW":
+        data_name_list_train = ["OULU", "CASIA_MFSD", "MSU_MFSD"]
+        data_name_list_test = ["SiW"]
+    elif protocol == "I_C_M_to_SiW":
+        data_name_list_train = ["MSU_MFSD", "CASIA_MFSD", "Replay_attack"]
+        data_name_list_test = ["SiW"]
     return data_name_list_train, data_name_list_test
 
 import torch

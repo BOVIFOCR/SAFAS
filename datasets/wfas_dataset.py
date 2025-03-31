@@ -31,11 +31,15 @@ ALL_AUG_IS_SPOOF = True
 AUG_RATIO = 100
 
 
-class OuluFaceDataset(Dataset):
-    def __init__(self, root_dir, labels_file, is_train, transform=None, scale_up=1.1, scale_down=1.0, UUID=-1):
+class WFASFaceDataset(Dataset):
+    def __init__(self, root_dir, transform=None, scale_up=1.1, scale_down=1.0, UUID=-1):
         self.root_dir = root_dir
-        self.video_df = pd.read_csv(labels_file, header=None)
-        self.is_train = is_train
+        self.subset = "dev"
+        # self.subset = "test"
+        self.video_df = pd.read_csv(
+                os.path.join(root_dir, self.subset+".txt"),
+                header=None)
+        self.is_train = False
         self.transform = transform
         self.scale_up = scale_up
         self.scale_down = scale_down
@@ -46,20 +50,18 @@ class OuluFaceDataset(Dataset):
         return len(self.video_df)
 
     def __getitem__(self, idx):
-        spoofing_label = self.video_df.iloc[idx, 0]
-        video_name = self.video_df.iloc[idx, 1]
+        video_path = self.video_df.iloc[idx, 1]
 
-        no_used_aug = video_name[0] in "0123456789"
+        image_dir = video_path + ('.png' if self.subset == "test" else '.jpg')
 
-        if ALL_AUG_IS_SPOOF:
-            spoofing_label &= no_used_aug
-        spoofing_label = int(spoofing_label)
-
-        subset_path = "train" if self.is_train else "test"
-        image_dir = os.path.join(self.root_dir, subset_path, video_name)
-
-        image_x = self.sample_image(image_dir, video_name)
-        image_x_view1 = self.transform(PIL.Image.fromarray(image_x))
+        image_x = self.sample_image(image_dir)
+        try:
+            image_x_view1 = self.transform(PIL.Image.fromarray(image_x))
+        except:
+            print(image_x.shape, image_dir)
+            print(PIL.Image.fromarray(image_x))
+            print(self.transform)
+            exit(1)
         if self.is_train:
             image_x_view2 = self.transform(PIL.Image.fromarray(image_x))
         else:
@@ -68,7 +70,7 @@ class OuluFaceDataset(Dataset):
         # só usam de fato image_x_v1, image_x_v2, label, e UUID
         sample = {"image_x_v1": np.array(image_x_view1),
                   "image_x_v2": np.array(image_x_view2),
-                  "label": spoofing_label,
+                  "label": 0,
                   "UUID": self.UUID,
                   'device_tag': 0,
                   'video': image_dir,
@@ -76,20 +78,12 @@ class OuluFaceDataset(Dataset):
                   'points': 0}
         return sample
 
-    def sample_image(self, image_dir, video_name):
-        frames = glob(os.path.join(image_dir, "*.jpg"))
-        frames_total = len(frames)
-        if frames_total == 0:
-            raise RuntimeError(image_dir)
-
-
-        for image_id in range(8):
-            image_name = f"{video_name}_{image_id}.jpg"
-            image_path = os.path.join(image_dir, image_name)
-
-            if os.path.exists(image_path):
-                break
-
-        image = imread(image_path)
-
+    def sample_image(self, image_path):
+        if not os.path.exists(image_path):
+            raise FileNotFoundError
+        try:
+            image = imread(image_path, mode='RGB')
+        except OSError:
+            print(f'arquivo ruim, {image_path}')
+            image = np.random.randint(0, 256, (224, 224, 3), dtype=np.uint8)
         return image

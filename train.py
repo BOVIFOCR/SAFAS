@@ -13,6 +13,8 @@ from datasets.supcon_dataset import FaceDataset, DEVICE_INFOS
 
 from datasets import get_datasets, TwoCropTransform
 
+from tqdm import tqdm
+
 torch.backends.cudnn.benchmark = True
 
 def log_f(f, console=True):
@@ -106,9 +108,10 @@ def main(args):
 
     train_loader = DataLoader(train_set, batch_size=args.batch_size, sampler=train_sampler, num_workers=4)
 
-    test_set = get_datasets(args.data_dir, FaceDataset, train=False, protocol=args.protocol, img_size=args.img_size, map_size=32, transform=test_transform, debug_subset_size=args.debug_subset_size)
-    if args.protocol == "O1":
-        test_loader = DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=4)
+    test_set = get_datasets(args.data_dir, FaceDataset, train=False, protocol=args.protocol, img_size=args.img_size, map_size=32, transform=test_transform, debug_subset_size=args.debug_subset_size, test_on_wfas=args.test_on_wfas)
+    if args.protocol == "O1" or args.test_on_wfas:
+        bsz = 196 if args.test_on_wfas else args.batch_size
+        test_loader = DataLoader(test_set, batch_size=bsz, shuffle=False, num_workers=4)
     else:
         test_loader = DataLoader(test_set[data_name_list_test[0]], batch_size=args.batch_size, shuffle=False, num_workers=4)
 
@@ -150,13 +153,68 @@ def main(args):
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
 
 
-    if args.resume:
-        model_path = os.path.join(model_root_path, "{}_p{}_best.pth".format(args.model_type, args.protocol))
+    if args.resume or args.test_on_wfas or args.skip_training:
+        # model_path = os.path.join(model_root_path, "{}_p{}_best.pth".format(args.model_type, args.protocol))
+        model_path = args.model_path
         ckpt = torch.load(model_path)
         model.load_state_dict(ckpt['state_dict'])
         optimizer.load_state_dict(ckpt['optimizer'])
         # args.start_epoch = ckpt['epoch']
         scheduler = ckpt['scheduler']
+
+    if args.test_on_wfas:
+        model.eval()
+        with torch.no_grad():
+            fnames_and_scores = []
+            for i, sample_batched in tqdm(enumerate(test_loader)):
+                image_x, live_label, UUID = sample_batched["image_x_v1"].cuda(), sample_batched["label"].cuda(), sample_batched["UUID"].cuda()
+                video_name = sample_batched["video"]
+                _, penul_feat, logit = model(image_x, out_type='all', scale=args.scale)
+
+                for i in range(len(logit)):
+                    fnames_and_scores.append((video_name[i], logit.squeeze()[i].item()))
+            for name, score in fnames_and_scores:
+                print(f'{name},{score}')
+        exit(0)
+    if args.skip_training:
+        ############################ test ###########################
+        score_path = os.path.join(score_root_path, "epoch_extra")
+        csv_path = os.path.join(csv_root_path, "epoch_extra")
+        check_folder(score_path)
+        check_folder(csv_path)
+
+        model.eval()
+        with torch.no_grad():
+            start_time = time.time()
+            scores_list = []
+            fnames_list = []
+            for i, sample_batched in enumerate(test_loader):
+                image_x, live_label, UUID = sample_batched["image_x_v1"].cuda(), sample_batched["label"].cuda(), sample_batched["UUID"].cuda()
+                video_name = sample_batched["video"]
+                _, penul_feat, logit = model(image_x, out_type='all', scale=args.scale)
+
+                for i in range(len(logit)):
+                    scores_list.append("{} {}\n".format(logit.squeeze()[i].item(), live_label[i].item()))
+                    fnames_list.append("{}\n".format(video_name[i]))
+
+
+        map_score_val_filename = os.path.join(score_path, "{}_score.txt".format(data_name_list_test[0]))
+        csv_val_filename = os.path.join(csv_path, "{}.csv".format(data_name_list_test[0]))
+        print("score: write test scores to {}".format(map_score_val_filename))
+        with open(map_score_val_filename, 'w') as file:
+            file.writelines(scores_list)
+
+        print("csv: write test filenames to {}".format(csv_val_filename))
+        with open(csv_val_filename, 'w') as file:
+            file.writelines(fnames_list)
+
+        try:
+            test_ACC, fpr, FRR, HTER, auc_test, test_err, tpr = performances_val(map_score_val_filename)
+        except:
+            raise ValueError(f"Something wrong with {map_score_val_filename=}, couldn't evaluate")
+
+        print(f"Result on test set (skipped training): {HTER=:.4f}, {auc_test=:.4f}")
+        exit(0)
 
     # metrics
     eva = {
@@ -304,7 +362,7 @@ def main(args):
             print("Model saved to {}".format(model_path))
 
 
-    epochs_saved = np.array([int(dir.replace("epoch_", "")) for dir in os.listdir(score_root_path)])
+    epochs_saved = np.array([int(dir.replace("epoch_", "")) for dir in os.listdir(score_root_path) if not "epoch_extra" in dir])
     epochs_saved = np.sort(epochs_saved)
     last_n_epochs = epochs_saved[::-1][:10]
 
@@ -375,6 +433,11 @@ def parse_args():
     parser.add_argument('--exchange_aug', type=str, default=None, choices=['patchexchange', 'landmarkexchange'])
     # balancing
     parser.add_argument('--class_balancing', action='store_true', help='do artificial class balancing')
+    # wfas
+    parser.add_argument('--test_on_wfas', action='store_true')
+
+    parser.add_argument('--skip_training', action='store_true')
+    parser.add_argument('--model_path', type=str)
     return parser.parse_args()
 
 

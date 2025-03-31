@@ -17,7 +17,6 @@ import matplotlib.pyplot as plt
 from ylib.scipy_misc import imread, imsave
 from .meta import DEVICE_INFOS
 
-# TODO return seeds to 0
 import time
 # torch.manual_seed(0)
 # torch.cuda.manual_seed(0)
